@@ -1,0 +1,37 @@
+﻿@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap");
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  line-height: 1.5;
+  font-family: var(--font-family-body, "Inter", "Segoe UI", system-ui, sans-serif);
+  color: var(--color-text-primary, #241b19);
+  background-color: var(--color-background, #fdf9f4);
+}
+
+body {
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--color-background, #fdf9f4);
+  background-image: url("/assets/backgrounds/marcelina-background.png");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  color: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
