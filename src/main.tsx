@@ -9,7 +9,7 @@ applyTheme();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter basename="/marcelina-confeitaria">
+    <BrowserRouter>
       <App />
     </BrowserRouter>
   </React.StrictMode>
