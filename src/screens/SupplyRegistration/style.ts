@@ -238,3 +238,30 @@ export const modalHint: CSSProperties = {
   fontSize: "0.9rem",
   color: theme.colors.neutrals.textSecondary,
 };
+
+export const movementBox: CSSProperties = {
+  marginTop: theme.spacing.md,
+  paddingTop: theme.spacing.sm,
+  borderTop: `1px solid ${theme.colors.neutrals.border}`,
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing.sm,
+};
+
+export const movementTitle: CSSProperties = {
+  fontWeight: 600,
+  color: theme.colors.neutrals.textPrimary,
+};
+
+export const movementFields: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: theme.spacing.sm,
+};
+
+export const movementActions: CSSProperties = {
+  display: "flex",
+  gap: theme.spacing.sm,
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+};

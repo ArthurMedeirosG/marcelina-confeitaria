@@ -1,9 +1,11 @@
-﻿import { supabaseClient } from "./supabase/client";
+import { supabaseClient } from './supabase/client';
+import { createMovimentacao } from './movimentacoesService';
 
 const VENDAS_TABLE = "vendas";
 const ITENS_TABLE = "venda_itens";
 
 type NumericLike = number | string | null;
+export type { NumericLike };
 
 function normalizeNumber(value: NumericLike) {
   if (typeof value === "number") return value;
@@ -12,6 +14,139 @@ function normalizeNumber(value: NumericLike) {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
   return 0;
+}
+
+type Composition = {
+  supplyId: number;
+  quantityPerProduct: number;
+  unit: string | null;
+  unitValue: number | null;
+  stock: number;
+};
+
+async function fetchSuppliesInfo(supplyIds: number[]) {
+  if (supplyIds.length === 0) return {} as Record<number, { unit: string | null; unitValue: number | null; stock: number }>;
+
+  const { data, error } = await supabaseClient
+    .from("insumos")
+    .select("id, quantidade, unidade, valor")
+    .in("id", supplyIds);
+
+  if (error) {
+    throw new Error(`Erro ao buscar dados de insumos: ${error.message}`);
+  }
+
+  return (
+    data?.reduce<Record<number, { unit: string | null; unitValue: number | null; stock: number }>>((acc, row) => {
+      acc[row.id as number] = {
+        unit: (row as any).unidade ?? null,
+        unitValue: (row as any).valor != null ? normalizeNumber((row as any).valor) : null,
+        stock: (row as any).quantidade != null ? normalizeNumber((row as any).quantidade) : 0,
+      };
+      return acc;
+    }, {}) ?? {}
+  );
+}
+
+async function fetchProductCompositions(productIds: number[]) {
+  if (productIds.length === 0) return {} as Record<number, Composition[]>;
+
+  const { data, error } = await supabaseClient
+    .from("produto_insumos")
+    .select("produto_id, insumo_id, quantidade")
+    .in("produto_id", productIds);
+
+  if (error) {
+    throw new Error(`Erro ao buscar composicao de produtos: ${error.message}`);
+  }
+
+  const supplyIds = Array.from(new Set((data ?? []).map((row) => row.insumo_id as number)));
+  const supplyInfo = await fetchSuppliesInfo(supplyIds);
+
+  const result: Record<number, Composition[]> = {};
+  (data ?? []).forEach((row) => {
+    const productId = row.produto_id as number;
+    const supplyId = row.insumo_id as number;
+    const info = supplyInfo[supplyId] ?? { unit: null, unitValue: null, stock: 0 };
+
+    const composition: Composition = {
+      supplyId,
+      quantityPerProduct: normalizeNumber((row as any).quantidade),
+      unit: info.unit,
+      unitValue: info.unitValue,
+      stock: info.stock,
+    };
+
+    if (!result[productId]) result[productId] = [];
+    result[productId].push(composition);
+  });
+
+  return result;
+}
+
+async function registerSaleMovements(vendaId: number, saleDate: string, items: CreateVendaItemInput[]) {
+  if (!items.length) return;
+
+  const productIds = Array.from(new Set(items.map((i) => i.productId)));
+  const compositionsByProduct = await fetchProductCompositions(productIds);
+
+  const consumptionBySupply: Record<
+    number,
+    { quantity: number; unit: string | null; unitValue: number | null; stock: number }
+  > = {};
+
+  for (const item of items) {
+    const compList = compositionsByProduct[item.productId] ?? [];
+    if (!compList.length) continue;
+
+    for (const comp of compList) {
+      const consumed = item.quantity * comp.quantityPerProduct;
+      if (consumed <= 0) continue;
+
+      const current = consumptionBySupply[comp.supplyId] ?? {
+        quantity: 0,
+        unit: comp.unit,
+        unitValue: comp.unitValue,
+        stock: comp.stock,
+      };
+
+      current.quantity += consumed;
+      if (current.unit === null) current.unit = comp.unit;
+      if (current.unitValue === null) current.unitValue = comp.unitValue;
+      consumptionBySupply[comp.supplyId] = current;
+    }
+  }
+
+  const entries = Object.entries(consumptionBySupply);
+  if (!entries.length) return;
+
+  // Atualiza estoque dos insumos (baixa)
+  await Promise.all(
+    entries.map(async ([supplyId, entry]) => {
+      const newQty = Math.max(0, (entry.stock ?? 0) - entry.quantity);
+      const { error } = await supabaseClient.from("insumos").update({ quantidade: newQty }).eq("id", Number(supplyId));
+      if (error) {
+        throw new Error(`Erro ao baixar estoque do insumo ${supplyId}: ${error.message}`);
+      }
+    })
+  );
+
+  // Registra movimenta‡Æo de sa¡da por venda para cada insumo
+  const movementDate = saleDate ?? new Date().toISOString();
+  await Promise.all(
+    entries.map(([supplyId, entry]) =>
+      createMovimentacao({
+        type: "saida_por_venda",
+        supplyId: Number(supplyId),
+        saleId: vendaId,
+        quantity: entry.quantity,
+        unit: entry.unit ?? undefined,
+        unitValue: entry.unitValue ?? undefined,
+        note: "Baixa automatica por venda",
+        movementDate,
+      })
+    )
+  );
 }
 
 export type VendaRecord = {
@@ -45,6 +180,8 @@ export type VendaItemRecord = {
   quantidade: NumericLike;
   preco_unitario: NumericLike;
   subtotal: NumericLike;
+  custo_unitario?: NumericLike | null;
+  custo_total?: NumericLike | null;
   created_at?: string | null;
 };
 
@@ -55,6 +192,8 @@ export type VendaItem = {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  costUnit?: number | null;
+  costTotal?: number | null;
   createdAt?: string | null;
 };
 
@@ -66,6 +205,8 @@ function mapItem(row: VendaItemRecord): VendaItem {
     quantity: normalizeNumber(row.quantidade),
     unitPrice: normalizeNumber(row.preco_unitario),
     subtotal: normalizeNumber(row.subtotal),
+    costUnit: row.custo_unitario != null ? normalizeNumber(row.custo_unitario) : null,
+    costTotal: row.custo_total != null ? normalizeNumber(row.custo_total) : null,
     createdAt: row.created_at ?? undefined,
   };
 }
@@ -107,6 +248,20 @@ export type UpdateVendaPayload = {
   saleDate?: string;
 };
 
+async function fetchProductCosts(productIds: number[]) {
+  const { data, error } = await supabaseClient
+    .from("produtos")
+    .select("id, custo")
+    .in("id", productIds);
+  if (error) {
+    throw new Error(`Erro ao buscar custos de produtos: ${error.message}`);
+  }
+  return data?.reduce<Record<number, number>>((acc, item) => {
+    acc[item.id as number] = normalizeNumber((item as any).custo);
+    return acc;
+  }, {}) ?? {};
+}
+
 export async function listVendas() {
   const { data, error } = await supabaseClient
     .from(VENDAS_TABLE)
@@ -126,6 +281,9 @@ export async function createVenda(payload: CreateVendaPayload) {
 
   const total = payload.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const saleDate = payload.saleDate ?? new Date().toISOString();
+
+  const productIds = Array.from(new Set(payload.items.map((i) => i.productId)));
+  const productCosts = await fetchProductCosts(productIds);
 
   const { data: vendaData, error: vendaError } = await supabaseClient
     .from(VENDAS_TABLE)
@@ -153,6 +311,8 @@ export async function createVenda(payload: CreateVendaPayload) {
     quantidade: item.quantity,
     preco_unitario: item.unitPrice,
     subtotal: item.quantity * item.unitPrice,
+    custo_unitario: productCosts[item.productId] ?? null,
+    custo_total: productCosts[item.productId] != null ? productCosts[item.productId] * item.quantity : null,
   }));
 
   const { data: itensData, error: itensError } = await supabaseClient
@@ -163,6 +323,8 @@ export async function createVenda(payload: CreateVendaPayload) {
   if (itensError || !itensData) {
     throw new Error(`Erro ao criar itens da venda: ${itensError?.message ?? "sem retorno"}`);
   }
+
+  await registerSaleMovements(vendaId, saleDate, payload.items);
 
   return mapVenda({ ...vendaData, venda_itens: itensData as VendaItemRecord[] } as VendaRecord);
 }
@@ -195,3 +357,5 @@ export async function updateVenda(id: number, payload: UpdateVendaPayload) {
 
   return mapVenda(data as VendaRecord);
 }
+
+

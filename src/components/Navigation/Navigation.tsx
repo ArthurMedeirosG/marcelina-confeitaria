@@ -7,6 +7,8 @@ const NAV_ITEMS = [
   { path: "/insumos", label: "Insumos" },
   { path: "/produtos", label: "Produtos" },
   { path: "/vendas", label: "Vendas" },
+  { path: "/vendas-analitico", label: "Vendas (análise)" },
+  { path: "/movimentacoes", label: "Movimentações" },
   { path: "/pedidos", label: "Pedidos" },
 ];
 

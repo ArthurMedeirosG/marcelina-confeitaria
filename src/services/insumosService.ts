@@ -1,5 +1,5 @@
-﻿import { supabaseClient } from "./supabase/client";
-
+import { supabaseClient } from "./supabase/client";
+import { createMovimentacao } from "./movimentacoesService";
 const TABLE = "insumos";
 
 export type SupplyRecord = {
@@ -85,7 +85,25 @@ export async function createSupply(payload: CreateSupplyPayload) {
     throw new Error(`Erro ao criar insumo: ${error?.message ?? "sem retorno"}`);
   }
 
-  return mapRow(data as SupplyRecord);
+  const supply = mapRow(data as SupplyRecord);
+
+  // Registra entrada inicial no histórico de movimentações
+  try {
+    await createMovimentacao({
+      type: "entrada_insumo",
+      supplyId: supply.id,
+      quantity: supply.quantity,
+      unit: supply.unit ?? undefined,
+      unitValue: supply.price,
+      note: "Entrada inicial do insumo",
+      movementDate: new Date().toISOString(),
+    });
+  } catch (movError) {
+    // Mantemos o insumo criado mesmo que a movimentação falhe
+    console.error("Erro ao registrar movimentação de entrada do insumo:", movError);
+  }
+
+  return supply;
 }
 
 export async function deleteSupply(id: number) {
@@ -112,4 +130,6 @@ export async function updateSupply(id: number, payload: UpdateSupplyPayload) {
 
   return mapRow(data as SupplyRecord);
 }
+
+
 

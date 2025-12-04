@@ -2,6 +2,7 @@
 import type { FormEvent } from "react";
 import * as S from "./style";
 import { createSupply, deleteSupply, listSupplies, updateSupply, type Supply } from "../../services/insumosService";
+import { createMovimentacao } from "../../services/movimentacoesService";
 
 type SupplyForm = {
   name: string;
@@ -10,13 +11,35 @@ type SupplyForm = {
   unit: string;
 };
 
-const UNIT_SUGGESTIONS = ["unidade", "kg", "g", "l", "ml", "caixa", "pacote", "litro"];
+const UNIT_OPTIONS = [
+  { value: "u", label: "Unidade" },
+  { value: "g", label: "Gramas" },
+  { value: "ml", label: "Mililitros" },
+];
+
+const todayIso = () => new Date().toISOString().split("T")[0];
+
+function normalizeUnit(value?: string | null) {
+  if (!value) return "u";
+  const lower = value.toLowerCase();
+  if (lower === "unidade" || lower === "u" || lower === "uni") return "u";
+  if (lower === "g" || lower === "grama" || lower === "gramas") return "g";
+  if (lower === "ml" || lower === "mililitro" || lower === "mililitros") return "ml";
+  return "u";
+}
+
+function unitLabel(value?: string | null) {
+  const found = UNIT_OPTIONS.find((opt) => opt.value === value);
+  if (found) return found.label;
+  return value ?? "-";
+}
 
 export function SupplyRegistration() {
   const [supplies, setSupplies] = useState<Supply[]>([]);
-  const [form, setForm] = useState<SupplyForm>({ name: "", quantity: "", price: "", unit: "unidade" });
+  const [form, setForm] = useState<SupplyForm>({ name: "", quantity: "", price: "", unit: "u" });
   const [editForm, setEditForm] = useState<SupplyForm | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [movementForm, setMovementForm] = useState({ quantity: "", unitValue: "", date: todayIso() });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -66,11 +89,7 @@ export function SupplyRegistration() {
       return;
     }
 
-    const unit = form.unit.trim();
-    if (!unit) {
-      setFeedback("Informe a unidade (ex.: unidade, kg, litro).");
-      return;
-    }
+    const unit = normalizeUnit(form.unit);
 
     setIsSaving(true);
     setFeedback(null);
@@ -98,7 +117,7 @@ export function SupplyRegistration() {
       name: supply.name,
       quantity: supply.quantity.toString(),
       price: supply.price.toString(),
-      unit: supply.unit ?? "",
+      unit: normalizeUnit(supply.unit),
     });
     setFeedback(null);
   };
@@ -106,6 +125,7 @@ export function SupplyRegistration() {
   const handleCloseEdit = () => {
     setEditingId(null);
     setEditForm(null);
+    setMovementForm({ quantity: "", unitValue: "", date: todayIso() });
   };
 
   const handleSaveEdit = async () => {
@@ -119,11 +139,7 @@ export function SupplyRegistration() {
       return;
     }
 
-    const unit = editForm.unit.trim();
-    if (!unit) {
-      setFeedback("Informe a unidade (ex.: unidade, kg, litro).");
-      return;
-    }
+    const unit = normalizeUnit(editForm.unit);
 
     setIsSaving(true);
     setFeedback(null);
@@ -154,6 +170,55 @@ export function SupplyRegistration() {
       handleCloseEdit();
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Não foi possível remover o insumo.");
+    }
+  };
+
+  const handleRegisterMovement = async (movementType: "entrada_insumo" | "saida_insumo") => {
+    if (!editingId || !editForm) return;
+
+    const qty = Number.parseFloat(movementForm.quantity.replace(",", "."));
+    const unitValue = movementForm.unitValue ? Number.parseFloat(movementForm.unitValue.replace(",", ".")) : null;
+
+    if (Number.isNaN(qty) || qty <= 0) {
+      setFeedback("Informe uma quantidade válida para a movimentação.");
+      return;
+    }
+
+    const targetSupply = supplies.find((s) => s.id === editingId);
+    if (!targetSupply) return;
+
+    const currentQty = targetSupply.quantity;
+    const newQty = movementType === "entrada_insumo" ? currentQty + qty : currentQty - qty;
+
+    if (newQty < 0) {
+      setFeedback("A saída não pode deixar o estoque negativo.");
+      return;
+    }
+
+    setIsSaving(true);
+    setFeedback(null);
+
+    try {
+      await createMovimentacao({
+        type: movementType,
+        supplyId: editingId,
+        quantity: qty,
+        unit: targetSupply.unit ?? null,
+        unitValue: unitValue ?? undefined,
+        movementDate: movementForm.date ? new Date(movementForm.date).toISOString() : undefined,
+        note: `Movimentação registrada no insumo ${targetSupply.name}`,
+      });
+
+      const updatedSupply = await updateSupply(editingId, {
+        quantity: newQty,
+      });
+
+      setSupplies((prev) => prev.map((item) => (item.id === editingId ? updatedSupply : item)));
+      setMovementForm({ quantity: "", unitValue: "", date: todayIso() });
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Não foi possível registrar a movimentação.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -220,23 +285,21 @@ export function SupplyRegistration() {
 
             <label style={S.label}>
               Unidade
-              <input
+              <select
                 name="unit"
-                list="unit-options"
                 style={S.input}
-                placeholder="unidade, kg, litro..."
                 value={form.unit}
                 onChange={(event) => setForm((previous) => ({ ...previous, unit: event.target.value }))}
                 required
-              />
+              >
+                {UNIT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
-
-          <datalist id="unit-options">
-            {UNIT_SUGGESTIONS.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
 
           <button type="submit" style={{ ...S.button, opacity: isSaving ? 0.7 : 1 }} disabled={isSaving}>
             {isSaving ? "Salvando..." : "Salvar insumo"}
@@ -280,7 +343,7 @@ export function SupplyRegistration() {
                   <tr key={supply.id}>
                     <td style={S.tableCell}>{supply.name}</td>
                     <td style={S.tableCell}>{supply.quantity}</td>
-                    <td style={S.tableCell}>{supply.unit ?? "-"}</td>
+                    <td style={S.tableCell}>{unitLabel(supply.unit)}</td>
                     <td style={S.tableCell}>
                       {supply.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                     </td>
@@ -334,11 +397,17 @@ export function SupplyRegistration() {
               </label>
               <label style={S.label}>
                 Unidade
-                <input
+                <select
                   style={S.input}
                   value={editForm.unit}
                   onChange={(event) => setEditForm((prev) => (prev ? { ...prev, unit: event.target.value } : prev))}
-                />
+                >
+                  {UNIT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
             <div style={S.modalActions}>
@@ -355,6 +424,51 @@ export function SupplyRegistration() {
             <p style={S.modalHint}>
               Antes de excluir um insumo, certifique-se de que nenhum produto possui ele em sua composição.
             </p>
+
+            <div style={S.movementBox}>
+              <p style={S.movementTitle}>Registrar movimentação</p>
+              <div style={S.movementFields}>
+                <label style={S.label}>
+                  Quantidade
+                  <input
+                    style={S.input}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={movementForm.quantity}
+                    onChange={(e) => setMovementForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                  />
+                </label>
+                <label style={S.label}>
+                  Valor unitário (opcional)
+                  <input
+                    style={S.input}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={movementForm.unitValue}
+                    onChange={(e) => setMovementForm((prev) => ({ ...prev, unitValue: e.target.value }))}
+                  />
+                </label>
+                <label style={S.label}>
+                  Data
+                  <input
+                    style={S.input}
+                    type="date"
+                    value={movementForm.date}
+                    onChange={(e) => setMovementForm((prev) => ({ ...prev, date: e.target.value }))}
+                  />
+                </label>
+              </div>
+              <div style={S.movementActions}>
+                <button type="button" style={S.modalButtonPrimary} onClick={() => handleRegisterMovement("entrada_insumo")} disabled={isSaving}>
+                  Entrada
+                </button>
+                <button type="button" style={S.modalButtonDanger} onClick={() => handleRegisterMovement("saida_insumo")} disabled={isSaving}>
+                  Saída
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
