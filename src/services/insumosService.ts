@@ -74,7 +74,7 @@ export async function listSupplies() {
 export async function createSupply(payload: CreateSupplyPayload) {
   const insertPayload = {
     nome: payload.name,
-    quantidade: Math.trunc(payload.quantity),
+    quantidade: payload.quantity,
     valor: payload.price.toString(),
     unidade: payload.unit?.trim() || null,
   };

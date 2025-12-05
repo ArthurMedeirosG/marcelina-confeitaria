@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import * as S from "./style";
 import { createSupply, deleteSupply, listSupplies, updateSupply, type Supply } from "../../services/insumosService";
@@ -53,22 +53,15 @@ export function SupplyRegistration() {
 
       try {
         const items = await listSupplies();
-        if (active) {
-          setSupplies(items);
-        }
+        if (active) setSupplies(items);
       } catch (error) {
-        if (active) {
-          setFeedback(error instanceof Error ? error.message : "Erro ao carregar os insumos.");
-        }
+        if (active) setFeedback(error instanceof Error ? error.message : "Erro ao carregar os insumos.");
       } finally {
-        if (active) {
-          setIsLoading(false);
-        }
+        if (active) setIsLoading(false);
       }
     }
 
     fetchSupplies();
-
     return () => {
       active = false;
     };
@@ -76,14 +69,10 @@ export function SupplyRegistration() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!form.name.trim() || isSaving) return;
 
-    if (!form.name.trim() || isSaving) {
-      return;
-    }
-
-    const quantity = Number.parseInt(form.quantity, 10);
+    const quantity = Number.parseFloat(form.quantity.replace(",", "."));
     const price = Number.parseFloat(form.price.replace(",", "."));
-
     if (Number.isNaN(quantity) || Number.isNaN(price)) {
       setFeedback("Quantidade e valor precisam ser números válidos.");
       return;
@@ -93,7 +82,6 @@ export function SupplyRegistration() {
 
     setIsSaving(true);
     setFeedback(null);
-
     try {
       const created = await createSupply({
         name: form.name.trim(),
@@ -101,7 +89,6 @@ export function SupplyRegistration() {
         price,
         unit,
       });
-
       setSupplies((previous) => [...previous, created]);
       setForm({ name: "", quantity: "", price: "", unit });
     } catch (error) {
@@ -131,9 +118,8 @@ export function SupplyRegistration() {
   const handleSaveEdit = async () => {
     if (!editingId || !editForm) return;
 
-    const quantity = Number.parseInt(editForm.quantity, 10);
+    const quantity = Number.parseFloat(editForm.quantity.replace(",", "."));
     const price = Number.parseFloat(editForm.price.replace(",", "."));
-
     if (Number.isNaN(quantity) || Number.isNaN(price)) {
       setFeedback("Quantidade e valor precisam ser números válidos.");
       return;
@@ -143,7 +129,6 @@ export function SupplyRegistration() {
 
     setIsSaving(true);
     setFeedback(null);
-
     try {
       const updated = await updateSupply(editingId, {
         name: editForm.name.trim(),
@@ -209,10 +194,7 @@ export function SupplyRegistration() {
         note: `Movimentação registrada no insumo ${targetSupply.name}`,
       });
 
-      const updatedSupply = await updateSupply(editingId, {
-        quantity: newQty,
-      });
-
+      const updatedSupply = await updateSupply(editingId, { quantity: newQty });
       setSupplies((prev) => prev.map((item) => (item.id === editingId ? updatedSupply : item)));
       setMovementForm({ quantity: "", unitValue: "", date: todayIso() });
     } catch (error) {
@@ -225,7 +207,6 @@ export function SupplyRegistration() {
   const metrics = useMemo(() => {
     const registeredItems = supplies.length;
     const totalValue = supplies.reduce((total, current) => total + current.quantity * current.price, 0);
-
     return { registeredItems, totalValue };
   }, [supplies]);
 
@@ -259,7 +240,7 @@ export function SupplyRegistration() {
                 name="quantity"
                 type="number"
                 min="0"
-                step="1"
+                step="0.01"
                 style={S.input}
                 placeholder="0"
                 value={form.quantity}
@@ -378,7 +359,7 @@ export function SupplyRegistration() {
                 <input
                   type="number"
                   min="0"
-                  step="1"
+                  step="0.01"
                   style={S.input}
                   value={editForm.quantity}
                   onChange={(event) => setEditForm((prev) => (prev ? { ...prev, quantity: event.target.value } : prev))}
@@ -461,10 +442,20 @@ export function SupplyRegistration() {
                 </label>
               </div>
               <div style={S.movementActions}>
-                <button type="button" style={S.modalButtonPrimary} onClick={() => handleRegisterMovement("entrada_insumo")} disabled={isSaving}>
+                <button
+                  type="button"
+                  style={S.modalButtonPrimary}
+                  onClick={() => handleRegisterMovement("entrada_insumo")}
+                  disabled={isSaving}
+                >
                   Entrada
                 </button>
-                <button type="button" style={S.modalButtonDanger} onClick={() => handleRegisterMovement("saida_insumo")} disabled={isSaving}>
+                <button
+                  type="button"
+                  style={S.modalButtonDanger}
+                  onClick={() => handleRegisterMovement("saida_insumo")}
+                  disabled={isSaving}
+                >
                   Saída
                 </button>
               </div>
