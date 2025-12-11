@@ -14,7 +14,9 @@ type SupplyForm = {
 const UNIT_OPTIONS = [
   { value: "u", label: "Unidade" },
   { value: "g", label: "Gramas" },
+  { value: "kg", label: "Quilogramas" },
   { value: "ml", label: "Mililitros" },
+  { value: "l", label: "Litros" },
 ];
 
 const todayIso = () => new Date().toISOString().split("T")[0];
@@ -24,7 +26,9 @@ function normalizeUnit(value?: string | null) {
   const lower = value.toLowerCase();
   if (lower === "unidade" || lower === "u" || lower === "uni") return "u";
   if (lower === "g" || lower === "grama" || lower === "gramas") return "g";
+  if (lower === "kg" || lower === "quilograma" || lower === "quilogramas" || lower === "quilo" || lower === "quilos") return "kg";
   if (lower === "ml" || lower === "mililitro" || lower === "mililitros") return "ml";
+  if (lower === "l" || lower === "lt" || lower === "litro" || lower === "litros") return "l";
   return "u";
 }
 
@@ -102,8 +106,8 @@ export function SupplyRegistration() {
     setEditingId(supply.id);
     setEditForm({
       name: supply.name,
-      quantity: supply.quantity.toString(),
-      price: supply.price.toString(),
+      quantity: supply.quantity.toFixed(2),
+      price: supply.price.toFixed(2),
       unit: normalizeUnit(supply.unit),
     });
     setFeedback(null);
@@ -323,7 +327,9 @@ export function SupplyRegistration() {
                 {supplies.map((supply) => (
                   <tr key={supply.id}>
                     <td style={S.tableCell}>{supply.name}</td>
-                    <td style={S.tableCell}>{supply.quantity}</td>
+                    <td style={S.tableCell}>
+                      {supply.quantity.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
                     <td style={S.tableCell}>{unitLabel(supply.unit)}</td>
                     <td style={S.tableCell}>
                       {supply.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
