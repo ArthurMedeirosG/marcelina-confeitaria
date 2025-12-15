@@ -74,12 +74,14 @@ export const inlineGroup: CSSProperties = {
 
 export const compositionRow: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1.2fr 1fr auto",
+  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
   gap: theme.spacing.sm,
+  alignItems: "end",
 };
 
 export const addButton: CSSProperties = {
-  alignSelf: "end",
+  alignSelf: "stretch",
+  justifySelf: "stretch",
   padding: "0.75rem 1rem",
   borderRadius: theme.radii.md,
   border: "none",
@@ -87,6 +89,7 @@ export const addButton: CSSProperties = {
   color: theme.colors.neutrals.surface,
   fontWeight: 600,
   cursor: "pointer",
+  minWidth: "120px",
 };
 
 export const chipsContainer: CSSProperties = {
