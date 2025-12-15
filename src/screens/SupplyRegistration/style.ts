@@ -165,6 +165,16 @@ export const errorMessage: CSSProperties = {
   fontSize: "0.9rem",
 };
 
+export const calculatedText: CSSProperties = {
+  fontSize: "0.95rem",
+  color: theme.colors.neutrals.textSecondary,
+};
+
+export const calculatedValue: CSSProperties = {
+  fontWeight: 700,
+  color: theme.colors.brand.cacao,
+};
+
 export const modalOverlay: CSSProperties = {
   position: "fixed",
   inset: 0,

@@ -38,6 +38,19 @@ function unitLabel(value?: string | null) {
   return value ?? "-";
 }
 
+function parseNumberInput(value: string) {
+  return Number.parseFloat(value.replace(",", "."));
+}
+
+function calculateUnitPrice(quantityInput: string, totalPaidInput: string) {
+  const qty = parseNumberInput(quantityInput);
+  const total = parseNumberInput(totalPaidInput);
+  if (Number.isNaN(qty) || Number.isNaN(total) || qty <= 0 || total < 0) {
+    return null;
+  }
+  return total / qty;
+}
+
 export function SupplyRegistration() {
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [form, setForm] = useState<SupplyForm>({ name: "", quantity: "", price: "", unit: "u" });
@@ -47,6 +60,11 @@ export function SupplyRegistration() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const calculatedUnitPrice = useMemo(() => calculateUnitPrice(form.quantity, form.price), [form.quantity, form.price]);
+  const editCalculatedUnitPrice = useMemo(
+    () => (editForm ? calculateUnitPrice(editForm.quantity, editForm.price) : null),
+    [editForm?.quantity, editForm?.price]
+  );
 
   useEffect(() => {
     let active = true;
@@ -75,10 +93,12 @@ export function SupplyRegistration() {
     event.preventDefault();
     if (!form.name.trim() || isSaving) return;
 
-    const quantity = Number.parseFloat(form.quantity.replace(",", "."));
-    const price = Number.parseFloat(form.price.replace(",", "."));
-    if (Number.isNaN(quantity) || Number.isNaN(price)) {
-      setFeedback("Quantidade e valor precisam ser números válidos.");
+    const quantity = parseNumberInput(form.quantity);
+    const totalPaid = parseNumberInput(form.price);
+    const unitPrice = calculateUnitPrice(form.quantity, form.price);
+
+    if (Number.isNaN(quantity) || Number.isNaN(totalPaid) || unitPrice === null || totalPaid <= 0) {
+      setFeedback("Quantidade e valor precisam ser válidos para calcular o custo unitário.");
       return;
     }
 
@@ -90,7 +110,7 @@ export function SupplyRegistration() {
       const created = await createSupply({
         name: form.name.trim(),
         quantity,
-        price,
+        price: unitPrice,
         unit,
       });
       setSupplies((previous) => [...previous, created]);
@@ -107,7 +127,7 @@ export function SupplyRegistration() {
     setEditForm({
       name: supply.name,
       quantity: supply.quantity.toFixed(2),
-      price: supply.price.toFixed(2),
+      price: (supply.price * supply.quantity).toFixed(2),
       unit: normalizeUnit(supply.unit),
     });
     setFeedback(null);
@@ -122,10 +142,11 @@ export function SupplyRegistration() {
   const handleSaveEdit = async () => {
     if (!editingId || !editForm) return;
 
-    const quantity = Number.parseFloat(editForm.quantity.replace(",", "."));
-    const price = Number.parseFloat(editForm.price.replace(",", "."));
-    if (Number.isNaN(quantity) || Number.isNaN(price)) {
-      setFeedback("Quantidade e valor precisam ser números válidos.");
+    const quantity = parseNumberInput(editForm.quantity);
+    const totalPaid = parseNumberInput(editForm.price);
+    const unitPrice = calculateUnitPrice(editForm.quantity, editForm.price);
+    if (Number.isNaN(quantity) || Number.isNaN(totalPaid) || unitPrice === null || totalPaid <= 0) {
+      setFeedback("Quantidade e valor precisam ser válidos para calcular o custo unitário.");
       return;
     }
 
@@ -137,7 +158,7 @@ export function SupplyRegistration() {
       const updated = await updateSupply(editingId, {
         name: editForm.name.trim(),
         quantity,
-        price,
+        price: unitPrice,
         unit,
       });
       setSupplies((prev) => prev.map((item) => (item.id === editingId ? updated : item)));
@@ -239,7 +260,7 @@ export function SupplyRegistration() {
 
           <div style={S.inlineGroup}>
             <label style={S.label}>
-              Quantidade
+              Quantidade comprada
               <input
                 name="quantity"
                 type="number"
@@ -254,7 +275,7 @@ export function SupplyRegistration() {
             </label>
 
             <label style={S.label}>
-              Valor unitário (R$)
+              Valor pago (R$)
               <input
                 name="price"
                 type="number"
@@ -269,7 +290,7 @@ export function SupplyRegistration() {
             </label>
 
             <label style={S.label}>
-              Unidade
+              Unidade da compra
               <select
                 name="unit"
                 style={S.input}
@@ -285,6 +306,14 @@ export function SupplyRegistration() {
               </select>
             </label>
           </div>
+
+          {calculatedUnitPrice !== null ? (
+            <p style={S.calculatedText}>
+              Valor unitário calculado: <span style={S.calculatedValue}>{calculatedUnitPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span> por {unitLabel(form.unit)}
+            </p>
+          ) : (
+            <p style={S.calculatedText}>Preencha quantidade e valor pago para calcular o valor unitário.</p>
+          )}
 
           <button type="submit" style={{ ...S.button, opacity: isSaving ? 0.7 : 1 }} disabled={isSaving}>
             {isSaving ? "Salvando..." : "Salvar insumo"}
@@ -361,7 +390,7 @@ export function SupplyRegistration() {
                 />
               </label>
               <label style={S.label}>
-                Quantidade
+                Quantidade comprada
                 <input
                   type="number"
                   min="0"
@@ -372,7 +401,7 @@ export function SupplyRegistration() {
                 />
               </label>
               <label style={S.label}>
-                Valor unitário (R$)
+                Valor pago (R$)
                 <input
                   type="number"
                   min="0"
@@ -383,7 +412,7 @@ export function SupplyRegistration() {
                 />
               </label>
               <label style={S.label}>
-                Unidade
+                Unidade da compra
                 <select
                   style={S.input}
                   value={editForm.unit}
@@ -396,6 +425,13 @@ export function SupplyRegistration() {
                   ))}
                 </select>
               </label>
+              {editCalculatedUnitPrice !== null ? (
+                <p style={S.calculatedText}>
+                  Valor unitário calculado: <span style={S.calculatedValue}>{editCalculatedUnitPrice.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span> por {unitLabel(editForm.unit)}
+                </p>
+              ) : (
+                <p style={S.calculatedText}>Preencha quantidade e valor pago para calcular o valor unitário.</p>
+              )}
             </div>
             <div style={S.modalActions}>
               <button type="button" style={S.modalButtonSecondary} onClick={handleCloseEdit}>
