@@ -191,6 +191,8 @@ export const modal: CSSProperties = {
   borderRadius: theme.radii.lg,
   padding: theme.spacing.lg,
   width: "min(520px, 100%)",
+  maxHeight: "90vh",
+  overflowY: "auto",
   boxShadow: theme.shadows.floating,
   border: `1px solid ${theme.colors.neutrals.border}`,
 };
