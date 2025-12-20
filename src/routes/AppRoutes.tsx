@@ -7,6 +7,7 @@ import { Products } from "../screens/Products/Products";
 import { Sales } from "../screens/Sales/Sales";
 import { Movements } from "../screens/Movements/Movements";
 import { SalesOverview } from "../screens/SalesOverview/SalesOverview";
+import { Accounts } from "../screens/Accounts/Accounts";
 
 export function AppRoutes() {
   return (
@@ -18,6 +19,7 @@ export function AppRoutes() {
         <Route path="/vendas" element={<Sales />} />
         <Route path="/vendas-analitico" element={<SalesOverview />} />
         <Route path="/movimentacoes" element={<Movements />} />
+        <Route path="/contas" element={<Accounts />} />
         <Route path="/pedidos" element={<Orders />} />
       </Route>
     </Routes>
