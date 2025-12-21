@@ -107,6 +107,7 @@ export async function createConta(payload: CreateContaPayload) {
     recorrente: isRecurring,
     recorrencia_tipo: isRecurring ? payload.recurrenceType ?? "mensal" : null,
     recorrencia_dia: isRecurring ? payload.recurrenceDay ?? null : null,
+    ativo: true,
   };
 
   const { data, error } = await supabaseClient.from(TABLE).insert(insertPayload).select("*").single();
